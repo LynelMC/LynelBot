@@ -2,10 +2,30 @@ import discord
 from discord.ext import commands
 import os
 import asyncio
+import threading
+from flask import Flask
 
+# -----------------------------
+# Flask (Render Web Service用)
+# -----------------------------
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Discord Bot is Running!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+
+# -----------------------------
+# Discord Bot
+# -----------------------------
 class MyBot(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.all() # 全てのインテントを有効化
+        intents = discord.Intents.all()
+
         super().__init__(
             command_prefix="!",
             intents=intents,
@@ -13,45 +33,59 @@ class MyBot(commands.Bot):
         )
 
     async def setup_hook(self):
-        # Cogの読み込み
+        print("=== setup_hook 開始 ===")
+
         cog_count = 0
-        for filename in os.listdir("./cogs"):
-            if filename.endswith(".py") and not filename.startswith("__"):
-                try:
-                    await self.load_extension(f"cogs.{filename[:-3]}")
-                    cog_count += 1
-                except Exception as e:
-                    print(f"Failed to load extension {filename}: {e}")
-        
+
+        if os.path.exists("./cogs"):
+            for filename in os.listdir("./cogs"):
+                if filename.endswith(".py") and not filename.startswith("__"):
+                    try:
+                        print(f"Loading {filename}")
+                        await self.load_extension(f"cogs.{filename[:-3]}")
+                        print(f"Loaded {filename}")
+                        cog_count += 1
+                    except Exception as e:
+                        print(f"Failed to load {filename}")
+                        print(e)
+
         print(f"Loaded {cog_count} extensions.")
-        
-        # スラッシュコマンドの同期
-        # await self.tree.sync()
+
+        try:
+            synced = await self.tree.sync()
+            print(f"Synced {len(synced)} slash commands.")
+        except Exception as e:
+            print("Slash command sync failed:")
+            print(e)
 
     async def on_ready(self):
-        print(f"Logged in as {self.user} (ID: {self.user.id})")
-        print("------")
+        print("----------------------------")
+        print(f"Logged in as {self.user}")
+        print(f"ID: {self.user.id}")
+        print("----------------------------")
+
 
 async def main():
-    # ローカル開発用に .env ファイルがあれば読み込む (Render上では不要)
     try:
         from dotenv import load_dotenv
         load_dotenv()
     except ImportError:
         pass
-    
-    # 環境変数からトークンを取得
-    # Renderのダッシュボードで 'DISCORD_BOT_TOKEN' という名前で環境変数を設定してください
+
     token = os.getenv("DISCORD_BOT_TOKEN")
-    
+
     if not token:
-        print("エラー: 環境変数 'DISCORD_BOT_TOKEN' が設定されていません。")
-        print("RenderのEnvironment設定、または .env ファイルを確認してください。")
+        print("DISCORD_BOT_TOKEN が設定されていません。")
         return
 
+    # Webサーバー起動
+    threading.Thread(target=run_web, daemon=True).start()
+
     bot = MyBot()
+
     async with bot:
         await bot.start(token)
+
 
 if __name__ == "__main__":
     try:
