@@ -26,13 +26,13 @@ class MyBot(commands.Bot):
         # ステータス設定
         await self.change_presence(
             status=discord.Status.online,
-            activity=discord.Game(name="正常稼働中")
+            activity=discord.Game(name="メンテナンス中")
         )
 
         print("=" * 50)
         print(f"Logged in as {self.user}")
         print(f"Bot ID: {self.user.id}")
-        print("ステータス: 正常稼働中")
+        print("ステータス: メンテナンス中")
         print("=" * 50)
 
 async def main():
