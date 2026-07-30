@@ -25,11 +25,16 @@ class MyBot(commands.Bot):
         print(f"Logged in as {self.user} (ID: {self.user.id})")
 
 async def main():
+    # ローカル開発用に .env を読み込む
     try:
         from dotenv import load_dotenv
         load_dotenv()
     except ImportError:
         pass
+
+    # Flaskサーバーを起動 (Renderの生存確認用)
+    from utils.keep_alive import keep_alive
+    keep_alive()
     
     token = os.getenv("DISCORD_BOT_TOKEN")
     if not token:
