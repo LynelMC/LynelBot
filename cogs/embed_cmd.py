@@ -147,8 +147,8 @@ class EmbedSetupView(discord.ui.View):
         use_timestamp = storage.get_setting(guild_id, "embed_timestamp", False)
 
         embed = discord.Embed(
-            title=title if title else discord.Embed.Empty,
-            description=description if description else discord.Embed.Empty,
+            title=title if title else None,
+            description=description if description else None,
             color=discord.Color.from_str(color_hex)
         )
         if image_url: embed.set_image(url=image_url)
