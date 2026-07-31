@@ -13,12 +13,17 @@ class ModulesCog(commands.Cog):
     @app_commands.command(name="modules", description="モジュール管理パネルの表示")
     @is_admin()
     async def modules(self, interaction: discord.Interaction):
-        embed = EmbedUtils.create_embed(
-            title="モジュール管理",
-            description="各機能の有効/無効を切り替えることができます。",
-            color=discord.Color.blue()
-        )
-        await interaction.response.send_message(embed=embed, view=ModulesView(interaction.guild_id), ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            embed = EmbedUtils.create_embed(
+                title="モジュール管理",
+                description="各機能の有効/無効を切り替えることができます。",
+                color=discord.Color.blue()
+            )
+            await interaction.followup.send(embed=embed, view=ModulesView(interaction.guild_id), ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"エラーが発生しました: {e}", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(ModulesCog(bot))
