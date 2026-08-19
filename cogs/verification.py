@@ -6,20 +6,52 @@ import storage
 
 VERIFY_CUSTOM_ID = "verify:button"
 
+DEFAULT_TITLE = "サーバー認証"
+DEFAULT_DESCRIPTION = "下のボタンを押すと認証が完了し、サーバーを閲覧できるようになります。"
+DEFAULT_BUTTON_LABEL = "認証する"
+DEFAULT_BUTTON_EMOJI = "✅"
+DEFAULT_COLOR = discord.Color.green().value
 
-class VerifyView(discord.ui.View):
-    """認証ボタンのView。persistentにするためtimeout=Noneかつcustom_id固定。"""
 
-    def __init__(self):
-        super().__init__(timeout=None)
+def parse_color(value: str) -> int:
+    """'#00ff00' や '00ff00' 形式の文字列を discord.Color用のint値に変換する。"""
+    text = value.strip().lstrip("#")
+    if len(text) != 6:
+        raise ValueError("カラーコードは6桁の16進数で指定してください(例: #00ff00)")
+    return int(text, 16)
 
-    @discord.ui.button(
-        label="認証する",
-        style=discord.ButtonStyle.success,
-        custom_id=VERIFY_CUSTOM_ID,
-        emoji="✅",
+
+def build_verify_view(label: str, emoji: str | None) -> discord.ui.View:
+    view = discord.ui.View(timeout=None)
+    view.add_item(
+        discord.ui.Button(
+            label=label,
+            style=discord.ButtonStyle.success,
+            custom_id=VERIFY_CUSTOM_ID,
+            emoji=emoji,
+        )
     )
-    async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    return view
+
+
+class Verification(commands.Cog):
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+
+    async def cog_load(self):
+        # Bot再起動後もボタンを動作させるためpersistent viewとして登録。
+        # ラベル/絵文字はcustom_idマッチングには影響しないため、デフォルト表示で登録しておけばよい。
+        self.bot.add_view(build_verify_view(DEFAULT_BUTTON_LABEL, DEFAULT_BUTTON_EMOJI))
+
+    # ---- 認証ボタンが押された時の処理(生のinteractionイベントで拾う) ----
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        if interaction.type != discord.InteractionType.component:
+            return
+        data = interaction.data or {}
+        if data.get("custom_id") != VERIFY_CUSTOM_ID:
+            return
+
         guild = interaction.guild
         if guild is None:
             return await interaction.response.send_message("サーバー内で使ってください。", ephemeral=True)
@@ -52,15 +84,7 @@ class VerifyView(discord.ui.View):
 
         await interaction.response.send_message("認証が完了しました！ようこそ。", ephemeral=True)
 
-
-class Verification(commands.Cog):
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-
-    async def cog_load(self):
-        # Bot再起動後もボタンを動作させるためpersistent viewとして登録
-        self.bot.add_view(VerifyView())
-
+    # ---- 設定コマンド群 ----
     setup_group = app_commands.Group(name="setup", description="Bot設定コマンド")
 
     @setup_group.command(name="verifyrole", description="認証時に付与するロールを設定します")
@@ -71,21 +95,74 @@ class Verification(commands.Cog):
             f"認証ロールを {role.mention} に設定しました。", ephemeral=True
         )
 
+    @setup_group.command(name="verifymessage", description="認証パネルの見た目をカスタマイズします(空欄は変更なし)")
+    @app_commands.describe(
+        title="パネルのタイトル",
+        description="パネルの説明文",
+        buttonlabel="ボタンに表示する文字",
+        buttonemoji="ボタンに表示する絵文字(任意・'none'で絵文字なしにできます)",
+        color="埋め込みの色をカラーコードで指定(例: #00ff00)",
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def setup_verifymessage(
+        self,
+        interaction: discord.Interaction,
+        title: str = None,
+        description: str = None,
+        buttonlabel: str = None,
+        buttonemoji: str = None,
+        color: str = None,
+    ):
+        guild_id = interaction.guild_id
+        if title is not None:
+            storage.set_guild_value(guild_id, "verify_title", title)
+        if description is not None:
+            storage.set_guild_value(guild_id, "verify_description", description)
+        if buttonlabel is not None:
+            storage.set_guild_value(guild_id, "verify_button_label", buttonlabel)
+        if buttonemoji is not None:
+            # 'none' / 'なし' 指定で絵文字を削除できるようにする
+            if buttonemoji.strip().lower() in ("none", "なし", ""):
+                storage.set_guild_value(guild_id, "verify_button_emoji", None)
+            else:
+                storage.set_guild_value(guild_id, "verify_button_emoji", buttonemoji)
+        if color is not None:
+            try:
+                color_value = parse_color(color)
+            except ValueError as e:
+                return await interaction.response.send_message(str(e), ephemeral=True)
+            storage.set_guild_value(guild_id, "verify_color", color_value)
+
+        await interaction.response.send_message(
+            "認証パネルの設定を更新しました。`/verifypanel` で反映したパネルを設置できます。",
+            ephemeral=True,
+        )
+
     @app_commands.command(name="verifypanel", description="認証パネルをこのチャンネルに設置します")
     @app_commands.checks.has_permissions(administrator=True)
     async def verifypanel(self, interaction: discord.Interaction):
-        role_id = storage.get_value(interaction.guild_id, "verify_role")
+        guild_id = interaction.guild_id
+        role_id = storage.get_value(guild_id, "verify_role")
         if not role_id:
             return await interaction.response.send_message(
                 "先に `/setup verifyrole` で認証ロールを設定してください。", ephemeral=True
             )
 
-        embed = discord.Embed(
-            title="サーバー認証",
-            description="下のボタンを押すと認証が完了し、サーバーを閲覧できるようになります。",
-            color=discord.Color.green(),
-        )
-        await interaction.channel.send(embed=embed, view=VerifyView())
+        title = storage.get_value(guild_id, "verify_title", DEFAULT_TITLE)
+        description = storage.get_value(guild_id, "verify_description", DEFAULT_DESCRIPTION)
+        button_label = storage.get_value(guild_id, "verify_button_label", DEFAULT_BUTTON_LABEL)
+        button_emoji = storage.get_value(guild_id, "verify_button_emoji", DEFAULT_BUTTON_EMOJI)
+        color_value = storage.get_value(guild_id, "verify_color", DEFAULT_COLOR)
+
+        embed = discord.Embed(title=title, description=description, color=discord.Color(color_value))
+
+        try:
+            view = build_verify_view(button_label, button_emoji)
+        except (discord.InvalidArgument, ValueError, TypeError):
+            # 絵文字の指定が不正だった場合は絵文字なしでフォールバック
+            view = build_verify_view(button_label, None)
+
+        await interaction.channel.send(embed=embed, view=view)
         await interaction.response.send_message("認証パネルを設置しました。", ephemeral=True)
 
 
