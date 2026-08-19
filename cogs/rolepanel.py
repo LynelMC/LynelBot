@@ -117,7 +117,13 @@ class RolePanel(commands.Cog):
             role6, role7, role8, role9, role10,
             role11, role12, role13, role14, role15,
         ]
-        roles = [r for r in candidates if r is not None]
+        seen_ids = set()
+        roles = []
+        for r in candidates:
+            if r is None or r.id in seen_ids:
+                continue
+            seen_ids.add(r.id)
+            roles.append(r)
 
         bot_member = interaction.guild.me
         for r in roles:
