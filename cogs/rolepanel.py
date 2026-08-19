@@ -1,16 +1,25 @@
+import string
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 ROLEPANEL_PREFIX = "rolepanel:"
+MAX_ROLES = 15
+ROLE_LETTERS = string.ascii_uppercase  # A-Z (表示用の対応表テキストに使用)
+
+
+def letter_emoji(index: int) -> str:
+    # 🇦=U+1F1E6 から始まる地域表示文字(リージョナルインジケーター)
+    return chr(0x1F1E6 + index)
 
 
 def build_panel_view(roles: list[discord.Role]) -> discord.ui.View:
     view = discord.ui.View(timeout=None)
-    for role in roles:
+    for i, role in enumerate(roles):
         view.add_item(
             discord.ui.Button(
-                label=role.name[:80],
+                emoji=letter_emoji(i),
                 style=discord.ButtonStyle.primary,
                 custom_id=f"{ROLEPANEL_PREFIX}{role.id}",
             )
@@ -18,14 +27,17 @@ def build_panel_view(roles: list[discord.Role]) -> discord.ui.View:
     return view
 
 
+def build_role_list_text(roles: list[discord.Role]) -> str:
+    return "\n".join(f"{letter_emoji(i)} ： {r.mention}" for i, r in enumerate(roles))
+
+
 class RolePanel(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    # ---- ロール付与/解除処理(生のinteractionイベントで拾う。再起動後も動く) ----
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
-        # discord.ui.Buttonにcallbackを付けていないため、生のinteractionイベントで処理する。
-        # これによりBot再起動後もcustom_idさえ一致すればボタンが機能し続ける。
         if interaction.type != discord.InteractionType.component:
             return
         data = interaction.data or {}
@@ -58,7 +70,7 @@ class RolePanel(commands.Cog):
                 ephemeral=True,
             )
 
-    @app_commands.command(name="rolepanel", description="ロールパネルをこのチャンネルに設置します(最大5個)")
+    @app_commands.command(name="rolepanel", description=f"ロールパネルをこのチャンネルに設置します(最大{MAX_ROLES}個)")
     @app_commands.describe(
         title="パネルのタイトル",
         description="パネルの説明文",
@@ -67,6 +79,16 @@ class RolePanel(commands.Cog):
         role3="3個目のロール(任意)",
         role4="4個目のロール(任意)",
         role5="5個目のロール(任意)",
+        role6="6個目のロール(任意)",
+        role7="7個目のロール(任意)",
+        role8="8個目のロール(任意)",
+        role9="9個目のロール(任意)",
+        role10="10個目のロール(任意)",
+        role11="11個目のロール(任意)",
+        role12="12個目のロール(任意)",
+        role13="13個目のロール(任意)",
+        role14="14個目のロール(任意)",
+        role15="15個目のロール(任意)",
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def rolepanel(
@@ -79,8 +101,23 @@ class RolePanel(commands.Cog):
         role3: discord.Role = None,
         role4: discord.Role = None,
         role5: discord.Role = None,
+        role6: discord.Role = None,
+        role7: discord.Role = None,
+        role8: discord.Role = None,
+        role9: discord.Role = None,
+        role10: discord.Role = None,
+        role11: discord.Role = None,
+        role12: discord.Role = None,
+        role13: discord.Role = None,
+        role14: discord.Role = None,
+        role15: discord.Role = None,
     ):
-        roles = [r for r in [role1, role2, role3, role4, role5] if r is not None]
+        candidates = [
+            role1, role2, role3, role4, role5,
+            role6, role7, role8, role9, role10,
+            role11, role12, role13, role14, role15,
+        ]
+        roles = [r for r in candidates if r is not None]
 
         bot_member = interaction.guild.me
         for r in roles:
@@ -93,12 +130,14 @@ class RolePanel(commands.Cog):
         embed = discord.Embed(title=title, description=description, color=discord.Color.blurple())
         embed.add_field(
             name="ロール一覧",
-            value="\n".join(f"・{r.mention}" for r in roles),
+            value=build_role_list_text(roles),
             inline=False,
         )
         view = build_panel_view(roles)
         await interaction.channel.send(embed=embed, view=view)
-        await interaction.response.send_message("ロールパネルを設置しました。", ephemeral=True)
+        await interaction.response.send_message(
+            f"ロールパネルを設置しました。({len(roles)}個のロール)", ephemeral=True
+        )
 
 
 async def setup(bot: commands.Bot):
