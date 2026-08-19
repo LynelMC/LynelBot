@@ -24,6 +24,8 @@ INITIAL_COGS = [
     "cogs.verification",
     "cogs.rolepanel",
     "cogs.logging_cog",
+    "cogs.mention_guard",
+    "cogs.moderation",
 ]
 
 
